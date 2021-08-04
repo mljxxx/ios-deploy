@@ -98,6 +98,7 @@ bool faster_path_search = false;
 bool command_only = false;
 char *command = NULL;
 char const*target_filename = NULL;
+char const*launch_path = NULL;
 char const*upload_pathname = NULL;
 char *bundle_id = NULL;
 NSMutableArray *keys = NULL;
@@ -2265,6 +2266,22 @@ void handle_device(AMDeviceRef device) {
                     @"Status": @"Complete",
                     @"Path": (__bridge NSString *)device_app_path
                     });
+        
+        NSString *current_path = [[NSFileManager defaultManager] currentDirectoryPath];
+        NSTask *pythonTask = [[NSTask alloc] init];
+        [pythonTask setCurrentDirectoryPath:current_path];
+        [pythonTask setLaunchPath:@"/usr/local/bin/python3"];
+        if(launch_path == NULL) {
+            [pythonTask setArguments:[NSArray arrayWithObjects:@"lldb_command_produce.py",(__bridge NSString *)device_app_path, nil]];
+        } else {
+            CFStringRef launch_path_url = CFStringCreateWithCString(NULL, launch_path, kCFStringEncodingUTF8);
+            [pythonTask setArguments:[NSArray arrayWithObjects:@"lldb_command_produce.py",(__bridge NSString *)device_app_path,(__bridge NSString *)launch_path_url, nil]];
+            CFRelease(launch_path_url);
+        }
+        [pythonTask launch];
+        pythonTask.terminationHandler = ^(NSTask * _Nonnull task) {
+            NSLogOut(@"Launch JSON write Completed");
+        };
 
       CFRelease(device_app_url);
       CFRelease(install_bundle_id);
@@ -2456,11 +2473,12 @@ int main(int argc, char *argv[]) {
         { "custom-script", required_argument, NULL, 1001},
         { "custom-command", required_argument, NULL, 1002},
         { "faster-path-search", no_argument, NULL, 1003},
+        { "launch_path", required_argument, NULL, 'P'},
         { NULL, 0, NULL, 0 },
     };
     int ch;
 
-    while ((ch = getopt_long(argc, argv, "VmcdvunrILefFD:R:X:i:b:a:t:p:1:2:o:l:w:9BWjNs:OE:CA:k:", longopts, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "VmcdvunrILefFDP:R:X:i:b:a:t:p:1:2:o:l:w:9BWjNs:OE:CA:k:", longopts, NULL)) != -1)
     {
         switch (ch) {
         case 'm':
@@ -2612,6 +2630,9 @@ int main(int argc, char *argv[]) {
         case 'k':
             if (!keys) keys = [[NSMutableArray alloc] init];
             [keys addObject: [NSString stringWithUTF8String:optarg]];
+            break;
+        case 'P':
+            launch_path = optarg;
             break;
         default:
             usage(argv[0]);
