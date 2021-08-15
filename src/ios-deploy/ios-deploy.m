@@ -1125,7 +1125,7 @@ void write_codelldb_launch_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
     fclose(out);
 
     CFRelease(cmds);
-    NSLogOut(@"Launch JSON write Completed");
+    NSLogOut(@"Launch JSON Write Completed");
 }
 
 CFSocketRef server_socket;
