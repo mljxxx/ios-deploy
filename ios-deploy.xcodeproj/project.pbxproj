@@ -17,7 +17,6 @@
 		7B28C98C1DC10655009569B6 /* device_db.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = device_db.h; sourceTree = "<group>"; };
 		7E1C00CC1C3C93AF00D686B5 /* version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = version.h; sourceTree = "<group>"; };
 		7E1C00CF1C3C9ABB00D686B5 /* lldb.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = lldb.py; path = src/scripts/lldb.py; sourceTree = SOURCE_ROOT; };
-		7E1C00D11C3C9CB000D686B5 /* lldb.py.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lldb.py.h; sourceTree = "<group>"; };
 		7E70898E1B587BF3004D23AA /* ios-deploy */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "ios-deploy"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E7089991B587DE4004D23AA /* ios-deploy.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "ios-deploy.m"; sourceTree = "<group>"; };
 		7E70899A1B587DE4004D23AA /* errors.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = errors.h; sourceTree = "<group>"; };
@@ -83,7 +82,6 @@
 		7E7089901B587BF3004D23AA /* ios-deploy */ = {
 			isa = PBXGroup;
 			children = (
-				7E1C00D11C3C9CB000D686B5 /* lldb.py.h */,
 				7E1C00CC1C3C93AF00D686B5 /* version.h */,
 				7E7089991B587DE4004D23AA /* ios-deploy.m */,
 				7E70899A1B587DE4004D23AA /* errors.h */,

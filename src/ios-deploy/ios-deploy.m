@@ -45,6 +45,33 @@
     connect\n\
 ")
 
+#define CODELLDB_LAUNCH_CMDS CFSTR("\
+{\n\
+  \"configurations\": {\n\
+    \"launch\": {\n\
+      \"adapter\": \"CodeLLDB\",\n\
+      \"configuration\": {\n\
+        \"type\": \"lldb\",\n\
+        \"request\": \"launch\",\n\
+        \"custom\" : true,\n\
+        \"name\": \"Debug\",\n\
+        \"cwd\": \"{workspace}\",\n\
+        \"initCommands\": [\n\
+          \"platform select remote-{platform} --sysroot \\\"{symbols_path}\\\"\",\n\
+          \"target create \\\"{disk_app}\\\"\",\n\
+          \"target modules search-paths add {modules_search_paths_pairs}\",\n\
+          \"script lldb.debugger.GetSelectedTarget().modules[0].SetPlatformFileSpec(lldb.SBFileSpec(\\\"{device_app}\\\"))\"\n\
+        ],\n\
+        \"processCreateCommands\": [\n\
+          \"process connect connect://127.0.0.1:{device_port}\",\n\
+          \"run\"\n\
+        ]\n\
+      }\n\
+    }\n\
+  }\n\
+}\n\
+")
+
 const char* lldb_prep_no_cmds = "";
 
 const char* lldb_prep_interactive_cmds = "\
@@ -68,9 +95,6 @@ NSMutableString * custom_commands = nil;
  * through the python interface. Also, Launch () doesn't seem to work when ran from init_module (), so we add
  * a command which can be used by the user to run it.
  */
-NSString* LLDB_FRUITSTRAP_MODULE = @
-    #include "lldb.py.h"
-;
 
 const char* output_path = NULL;
 const char* error_path = NULL;
@@ -902,52 +926,6 @@ void write_lldb_prep_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
     CFStringFindAndReplace(cmds, CFSTR("{symbols_path}"), symbols_path, range, 0);
     range.length = CFStringGetLength(cmds);
 
-    CFMutableStringRef pmodule = CFStringCreateMutableCopy(NULL, 0, (CFStringRef)LLDB_FRUITSTRAP_MODULE);
-
-    CFRange rangeLLDB = { 0, CFStringGetLength(pmodule) };
-    
-    CFStringRef exitcode_app_crash_str = CFStringCreateWithFormat(NULL, NULL, CFSTR("%d"), exitcode_app_crash);
-    CFStringFindAndReplace(pmodule, CFSTR("{exitcode_app_crash}"), exitcode_app_crash_str, rangeLLDB, 0);
-    CFRelease(exitcode_app_crash_str);
-    rangeLLDB.length = CFStringGetLength(pmodule);
-    
-    CFStringRef detect_deadlock_timeout_str = CFStringCreateWithFormat(NULL, NULL, CFSTR("%d"), _detectDeadlockTimeout);
-    CFStringFindAndReplace(pmodule, CFSTR("{detect_deadlock_timeout}"), detect_deadlock_timeout_str, rangeLLDB, 0);
-    CFRelease(detect_deadlock_timeout_str);
-    rangeLLDB.length = CFStringGetLength(pmodule);
-
-    if (args) {
-        CFStringRef cf_args = CFStringCreateWithCString(NULL, args, kCFStringEncodingUTF8);
-        CFStringFindAndReplace(cmds, CFSTR("{args}"), cf_args, range, 0);
-        rangeLLDB.length = CFStringGetLength(pmodule);
-        CFStringFindAndReplace(pmodule, CFSTR("{args}"), cf_args, rangeLLDB, 0);
-
-        //printf("write_lldb_prep_cmds:args: [%s][%s]\n", CFStringGetCStringPtr (cmds,kCFStringEncodingMacRoman),
-        //    CFStringGetCStringPtr(pmodule, kCFStringEncodingMacRoman));
-        CFRelease(cf_args);
-    } else {
-        CFStringFindAndReplace(cmds, CFSTR("{args}"), CFSTR(""), range, 0);
-        CFStringFindAndReplace(pmodule, CFSTR("{args}"), CFSTR(""), rangeLLDB, 0);
-        //printf("write_lldb_prep_cmds: [%s][%s]\n", CFStringGetCStringPtr (cmds,kCFStringEncodingMacRoman),
-        //    CFStringGetCStringPtr(pmodule, kCFStringEncodingMacRoman));
-    }
-
-    if (envs) {
-        CFStringRef cf_envs = CFStringCreateWithCString(NULL, envs, kCFStringEncodingUTF8);
-        CFStringFindAndReplace(cmds, CFSTR("{envs}"), cf_envs, range, 0);
-        rangeLLDB.length = CFStringGetLength(pmodule);
-        CFStringFindAndReplace(pmodule, CFSTR("{envs}"), cf_envs, rangeLLDB, 0);
-
-        //printf("write_lldb_prep_cmds:envs: [%s][%s]\n", CFStringGetCStringPtr (cmds,kCFStringEncodingMacRoman),
-        //    CFStringGetCStringPtr(pmodule, kCFStringEncodingMacRoman));
-        CFRelease(cf_envs);
-    } else {
-        CFStringFindAndReplace(cmds, CFSTR("{envs}"), CFSTR(""), range, 0);
-        CFStringFindAndReplace(pmodule, CFSTR("{envs}"), CFSTR(""), rangeLLDB, 0);
-        //printf("write_lldb_prep_cmds: [%s][%s]\n", CFStringGetCStringPtr (cmds,kCFStringEncodingMacRoman),
-        //    CFStringGetCStringPtr(pmodule, kCFStringEncodingMacRoman));
-    }
-    range.length = CFStringGetLength(cmds);
 
     CFStringRef bundle_identifier = copy_disk_app_identifier(disk_app_url);
     CFURLRef device_app_url = copy_device_app_url(device, bundle_identifier);
@@ -965,23 +943,6 @@ void write_lldb_prep_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
     CFStringRef device_port = CFStringCreateWithFormat(NULL, NULL, CFSTR("%d"), port);
     CFStringFindAndReplace(cmds, CFSTR("{device_port}"), device_port, range, 0);
     CFRelease(device_port);
-    range.length = CFStringGetLength(cmds);
-
-    if (output_path) {
-        CFStringRef output_path_str = CFStringCreateWithCString(NULL, output_path, kCFStringEncodingUTF8);
-        CFStringFindAndReplace(cmds, CFSTR("{output_path}"), output_path_str, range, 0);
-        CFRelease(output_path_str);
-    } else {
-        CFStringFindAndReplace(cmds, CFSTR("{output_path}"), CFSTR(""), range, 0);
-    }
-    range.length = CFStringGetLength(cmds);
-    if (error_path) {
-        CFStringRef error_path_str = CFStringCreateWithCString(NULL, error_path, kCFStringEncodingUTF8);
-        CFStringFindAndReplace(cmds, CFSTR("{error_path}"), error_path_str, range, 0);
-        CFRelease(error_path_str);
-    } else {
-        CFStringFindAndReplace(cmds, CFSTR("{error_path}"), CFSTR(""), range, 0);
-    }
     range.length = CFStringGetLength(cmds);
 
     CFURLRef device_container_url = CFURLCreateCopyDeletingLastPathComponent(NULL, device_app_url);
@@ -1054,33 +1015,84 @@ void write_lldb_prep_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
     }
     fclose(out);
 
+    CFRelease(cmds);
+}
 
-    out = fopen([python_file_path UTF8String], "w");
-    CFDataRef pmodule_data = CFStringCreateExternalRepresentation(NULL, pmodule, kCFStringEncodingUTF8, 0);
-    fwrite(CFDataGetBytePtr(pmodule_data), CFDataGetLength(pmodule_data), 1, out);
-    CFRelease(pmodule_data);
+void write_codelldb_launch_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
+    CFStringRef launch_path_url = CFStringCreateWithCString(NULL, launch_path, kCFStringEncodingUTF8);
+    NSString *json_file_path= [(__bridge NSString *)launch_path_url stringByAppendingString:@"/.vimspector.json"];
+    NSString *workspace_path = [(__bridge NSString *)launch_path_url stringByDeletingLastPathComponent];
+    CFRelease(launch_path_url);
 
-    if (custom_script_path)
-    {
-        FILE * fh = fopen(custom_script_path, "r");
-        if (fh == NULL)
-        {
-            on_error(@"Failed to open %s", custom_script_path);
-        }
-        fwrite("\n", 1, 1, out);
-        char buffer[0x1000];
-        size_t bytesRead;
-        while ((bytesRead = fread(buffer, 1, sizeof(buffer), fh)) > 0)
-        {
-            fwrite(buffer, 1, bytesRead, out);
-        }
-        fclose(fh);
-    }
+    CFStringRef symbols_path = copy_device_support_path(device, CFSTR("Symbols"));
+    CFMutableStringRef cmds = CFStringCreateMutableCopy(NULL, 0, CODELLDB_LAUNCH_CMDS);
+    CFRange range = { 0, CFStringGetLength(cmds) };
 
+    CFStringFindAndReplace(cmds, CFSTR("{workspace}"), (__bridge CFStringRef)workspace_path, range, 0);
+    range.length = CFStringGetLength(cmds);
+    
+    CFStringFindAndReplace(cmds, CFSTR("{platform}"), get_device_platform(device), range, 0);
+    range.length = CFStringGetLength(cmds);
+
+    CFStringFindAndReplace(cmds, CFSTR("{symbols_path}"), symbols_path, range, 0);
+    range.length = CFStringGetLength(cmds);
+
+    CFStringRef bundle_identifier = copy_disk_app_identifier(disk_app_url);
+    CFURLRef device_app_url = copy_device_app_url(device, bundle_identifier);
+    CFRelease(bundle_identifier);
+    CFStringRef device_app_path = CFURLCopyFileSystemPath(device_app_url, kCFURLPOSIXPathStyle);
+    CFStringFindAndReplace(cmds, CFSTR("{device_app}"), device_app_path, range, 0);
+    CFRelease(device_app_path);
+    range.length = CFStringGetLength(cmds);
+
+    CFStringRef disk_app_path = CFURLCopyFileSystemPath(disk_app_url, kCFURLPOSIXPathStyle);
+    CFStringFindAndReplace(cmds, CFSTR("{disk_app}"), disk_app_path, range, 0);
+    CFRelease(disk_app_path);
+    range.length = CFStringGetLength(cmds);
+
+    CFStringRef device_port = CFStringCreateWithFormat(NULL, NULL, CFSTR("%d"), port);
+    CFStringFindAndReplace(cmds, CFSTR("{device_port}"), device_port, range, 0);
+    CFRelease(device_port);
+    range.length = CFStringGetLength(cmds);
+
+    CFURLRef device_container_url = CFURLCreateCopyDeletingLastPathComponent(NULL, device_app_url);
+    CFRelease(device_app_url);
+    CFStringRef device_container_path = CFURLCopyFileSystemPath(device_container_url, kCFURLPOSIXPathStyle);
+    CFRelease(device_container_url);
+    CFMutableStringRef dcp_noprivate = CFStringCreateMutableCopy(NULL, 0, device_container_path);
+    range.length = CFStringGetLength(dcp_noprivate);
+    CFStringFindAndReplace(dcp_noprivate, CFSTR("/private/var/"), CFSTR("/var/"), range, 0);
+    range.length = CFStringGetLength(cmds);
+    CFStringFindAndReplace(cmds, CFSTR("{device_container}"), dcp_noprivate, range, 0);
+    range.length = CFStringGetLength(cmds);
+
+    CFURLRef disk_container_url = CFURLCreateCopyDeletingLastPathComponent(NULL, disk_app_url);
+    CFStringRef disk_container_path = CFURLCopyFileSystemPath(disk_container_url, kCFURLPOSIXPathStyle);
+    CFRelease(disk_container_url);
+    CFStringFindAndReplace(cmds, CFSTR("{disk_container}"), disk_container_path, range, 0);
+    range.length = CFStringGetLength(cmds);
+    
+    CFMutableStringRef search_paths_pairs = CFStringCreateMutableCopy(NULL, 0, copy_modules_search_paths_pairs(symbols_path, disk_container_path, device_container_path, dcp_noprivate));
+    CFRelease(symbols_path);
+    CFRelease(device_container_path);
+    CFRelease(dcp_noprivate);
+    CFRelease(disk_container_path);
+    CFRange search_paths_pairs_range = { 0, CFStringGetLength(search_paths_pairs) };
+    CFStringFindAndReplace(search_paths_pairs, CFSTR("\""),CFSTR("\\\""),search_paths_pairs_range, 0);
+    CFStringFindAndReplace(cmds, CFSTR("{modules_search_paths_pairs}"), search_paths_pairs, range, 0);
+    range.length = CFStringGetLength(cmds);
+    CFRelease(search_paths_pairs);
+    
+
+
+    FILE *out = fopen([json_file_path UTF8String], "w");
+    CFDataRef cmds_data = CFStringCreateExternalRepresentation(NULL, cmds, kCFStringEncodingUTF8, 0);
+    fwrite(CFDataGetBytePtr(cmds_data), CFDataGetLength(cmds_data), 1, out);
+    CFRelease(cmds_data);
     fclose(out);
 
     CFRelease(cmds);
-    CFRelease(pmodule);
+    NSLogOut(@"Launch JSON write Completed");
 }
 
 CFSocketRef server_socket;
@@ -1328,8 +1340,14 @@ void setup_lldb(AMDeviceRef device, CFURLRef url) {
 
     mount_developer_image(device);      // put debugserver on the device
     start_remote_debug_server(device);  // start debugserver
-    if (!debugserver_only)
+    if (!debugserver_only) {
         write_lldb_prep_cmds(device, url);   // dump the necessary lldb commands into a file
+    } else {
+        if(launch_path != NULL) {
+            write_codelldb_launch_cmds(device, url);
+        }
+    }
+        
     if (url != NULL)
         CFRelease(url);
 
@@ -2266,22 +2284,6 @@ void handle_device(AMDeviceRef device) {
                     @"Status": @"Complete",
                     @"Path": (__bridge NSString *)device_app_path
                     });
-        
-        NSString *current_path = [[NSFileManager defaultManager] currentDirectoryPath];
-        NSTask *pythonTask = [[NSTask alloc] init];
-        [pythonTask setCurrentDirectoryPath:current_path];
-        [pythonTask setLaunchPath:@"/usr/local/bin/python3"];
-        if(launch_path == NULL) {
-            [pythonTask setArguments:[NSArray arrayWithObjects:@"lldb_command_produce.py",(__bridge NSString *)device_app_path, nil]];
-        } else {
-            CFStringRef launch_path_url = CFStringCreateWithCString(NULL, launch_path, kCFStringEncodingUTF8);
-            [pythonTask setArguments:[NSArray arrayWithObjects:@"lldb_command_produce.py",(__bridge NSString *)device_app_path,(__bridge NSString *)launch_path_url, nil]];
-            CFRelease(launch_path_url);
-        }
-        [pythonTask launch];
-        pythonTask.terminationHandler = ^(NSTask * _Nonnull task) {
-            NSLogOut(@"Launch JSON write Completed");
-        };
 
       CFRelease(device_app_url);
       CFRelease(install_bundle_id);
