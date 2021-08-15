@@ -72,6 +72,30 @@
 }\n\
 ")
 
+#define VSCOCE_LLDB_LAUNCH_CMDS CFSTR("\
+{\n\
+  \"configurations\": [\n\
+    {\n\
+      \"type\": \"lldb\",\n\
+      \"request\": \"custom\",\n\
+      \"name\": \"Debug\",\n\
+      \"cwd\": \"{workspace}\",\n\
+      \"initCommands\": [\n\
+        \"platform select remote-{platform} --sysroot \\\"{symbols_path}\\\"\",\n\
+        \"target create \\\"{disk_app}\\\"\",\n\
+        \"target modules search-paths add {modules_search_paths_pairs}\",\n\
+        \"script lldb.debugger.GetSelectedTarget().modules[0].SetPlatformFileSpec(lldb.SBFileSpec(\\\"{device_app}\\\"))\"\n\
+      ],\n\
+      \"processCreateCommands\": [\n\
+        {custom_script_path}\
+        \"process connect connect://127.0.0.1:{device_port}\",\n\
+        \"run\"\n\
+      ]\n\
+    }\n\
+  ]\n\
+}\
+")
+
 const char* lldb_prep_no_cmds = "";
 
 const char* lldb_prep_interactive_cmds = "\
@@ -1020,12 +1044,13 @@ void write_lldb_prep_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
 
 void write_codelldb_launch_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
     CFStringRef launch_path_url = CFStringCreateWithCString(NULL, launch_path, kCFStringEncodingUTF8);
-    NSString *json_file_path= [(__bridge NSString *)launch_path_url stringByAppendingString:@"/.vimspector.json"];
+    NSString *config_file_path= [(__bridge NSString *)launch_path_url stringByAppendingString:@"/launch.json"];
+    NSString *script_path= [(__bridge NSString *)launch_path_url stringByAppendingString:@"/lldb.py"];
     NSString *workspace_path = [(__bridge NSString *)launch_path_url stringByDeletingLastPathComponent];
     CFRelease(launch_path_url);
 
     CFStringRef symbols_path = copy_device_support_path(device, CFSTR("Symbols"));
-    CFMutableStringRef cmds = CFStringCreateMutableCopy(NULL, 0, CODELLDB_LAUNCH_CMDS);
+    CFMutableStringRef cmds = CFStringCreateMutableCopy(NULL, 0, VSCOCE_LLDB_LAUNCH_CMDS);
     CFRange range = { 0, CFStringGetLength(cmds) };
 
     CFStringFindAndReplace(cmds, CFSTR("{workspace}"), (__bridge CFStringRef)workspace_path, range, 0);
@@ -1083,9 +1108,17 @@ void write_codelldb_launch_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
     range.length = CFStringGetLength(cmds);
     CFRelease(search_paths_pairs);
     
+    if([[NSFileManager defaultManager] fileExistsAtPath:script_path]) {
+        CFStringRef custom_script = CFStringCreateWithFormat(NULL, NULL, CFSTR("\"command script import %@\",\n"),script_path);
+        CFStringFindAndReplace(cmds, CFSTR("{custom_script_path}"), custom_script, range, 0);
+        CFRelease(custom_script);
+    } else {
+        CFStringFindAndReplace(cmds, CFSTR("        {custom_script_path}"), CFSTR(""), range, 0);
+    }
+    range.length = CFStringGetLength(cmds);
 
 
-    FILE *out = fopen([json_file_path UTF8String], "w");
+    FILE *out = fopen([config_file_path UTF8String], "w");
     CFDataRef cmds_data = CFStringCreateExternalRepresentation(NULL, cmds, kCFStringEncodingUTF8, 0);
     fwrite(CFDataGetBytePtr(cmds_data), CFDataGetLength(cmds_data), 1, out);
     CFRelease(cmds_data);
